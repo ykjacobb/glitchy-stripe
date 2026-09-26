@@ -1,6 +1,6 @@
 {
   "name": "glitchy-stripe",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Glitchy affiliate network (gtrx.org) integration for Stripe — postback firing, cookie tracking, and deduplication helpers.",
   "type": "module",
   "exports": {

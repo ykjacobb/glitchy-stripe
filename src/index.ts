@@ -10,4 +10,4 @@ export {
 } from "./stripe.js";
 export type { CookieJar } from "./stripe.js";
 
-export { convertSaleAmountToUSD, STRIPE_ZERO_DECIMAL_CURRENCIES } from "./currency.js";
+export { convertSaleAmountToUSD } from "./currency.js";
