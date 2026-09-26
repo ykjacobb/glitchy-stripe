@@ -1,13 +1,13 @@
-export { fireGlitchyPostback, GLITCHY_OFFER_ID } from "./postback.js";
-export type { GlitchyPostbackInput, GlitchyPostbackResult } from "./postback.js";
+export { fireGlitchyPostback, GLITCHY_OFFER_ID } from "./postback";
+export type { GlitchyPostbackInput, GlitchyPostbackResult } from "./postback";
 
-export { GlitchyTracker } from "./tracker.js";
+export { GlitchyTracker } from "./tracker";
 
 export {
     getGlitchyMetadataFromCookies,
     glitchyAlreadyReported,
     markGlitchyReported,
-} from "./stripe.js";
-export type { CookieJar } from "./stripe.js";
+} from "./stripe";
+export type { CookieJar } from "./stripe";
 
-export { convertSaleAmountToUSD } from "./currency.js";
+export { convertSaleAmountToUSD } from "./currency";
