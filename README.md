@@ -78,14 +78,15 @@ import {
     markGlitchyReported,
 } from "glitchy-stripe";
 
-// Build this once: 1 unit of each currency = X USD.
-// Derive it from whatever FX table your app already has.
+// Exchange rates change daily. Two options:
+//   Option A — hardcode approximate rates (fine for rough affiliate reporting)
+//   Option B — fetch live rates (see "Exchange rates" section below)
 const USD_RATES: Record<string, number> = {
     usd: 1,
     gbp: 1.27,
     eur: 1.08,
     jpy: 0.0067,
-    // ... add every currency your checkout supports
+    // ... every currency your checkout supports
 };
 
 async function reportToGlitchy(
@@ -135,6 +136,50 @@ convertSaleAmountToUSD(1328, "jpy", { jpy: 0.0067 }); // → "8.90"
 // If you need to add currencies to the zero-decimal set:
 convertSaleAmountToUSD(amount, currency, rates, new Set([...STRIPE_ZERO_DECIMAL_CURRENCIES, "myr"]));
 ```
+
+---
+
+## Exchange rates
+
+Hardcoded rates work fine — the postback amount is only used by the affiliate network to calculate their commission split, so a few percent of drift doesn't matter much. But if you want live rates, here's a simple in-memory cache using the free [Frankfurter API](https://www.frankfurter.app) (no key required):
+
+```ts
+// lib/fx.ts
+let cachedRates: Record<string, number> | null = null;
+let cacheExpiresAt = 0;
+
+export async function getUsdRates(): Promise<Record<string, number>> {
+    if (cachedRates && Date.now() < cacheExpiresAt) return cachedRates;
+
+    const res = await fetch("https://api.frankfurter.app/latest?from=USD");
+    const json = await res.json();
+
+    // Frankfurter returns rates relative to USD, e.g. { GBP: 0.79, JPY: 149 }
+    // meaning 1 USD = 0.79 GBP. We need the inverse: 1 GBP = 1/0.79 USD.
+    const rates: Record<string, number> = { usd: 1 };
+    for (const [code, rate] of Object.entries(json.rates as Record<string, number>)) {
+        rates[code.toLowerCase()] = 1 / rate;
+    }
+
+    cachedRates = rates;
+    cacheExpiresAt = Date.now() + 60 * 60 * 1000; // refresh every hour
+    return rates;
+}
+```
+
+Then in your webhook:
+
+```ts
+import { getUsdRates } from "@/lib/fx";
+
+const saleAmount = convertSaleAmountToUSD(
+    session.amount_total ?? 0,
+    session.currency ?? "usd",
+    await getUsdRates(),
+);
+```
+
+The cache means you only hit the FX API once per hour across all webhook events, not once per event.
 
 ---
 
