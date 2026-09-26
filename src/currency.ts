@@ -46,12 +46,13 @@ export function convertSaleAmountToUSD(
     zeroDecimalCurrencies: Set<string> = STRIPE_ZERO_DECIMAL_CURRENCIES,
 ): string {
     const cur = currency.toLowerCase();
-    const isZeroDecimal = zeroDecimalCurrencies.has(cur);
-    const decimalAmount = isZeroDecimal ? amountTotal : amountTotal / 100;
 
     if (cur === "usd") {
-        return decimalAmount.toFixed(2);
+        return (amountTotal / 100).toFixed(2);
     }
+
+    const isZeroDecimal = zeroDecimalCurrencies.has(cur);
+    const decimalAmount = isZeroDecimal ? amountTotal : amountTotal / 100;
 
     const rate = usdRates[cur];
     if (!rate) {
