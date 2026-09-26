@@ -1,0 +1,23 @@
+{
+  "name": "glitchy-stripe",
+  "version": "1.0.0",
+  "description": "Glitchy affiliate network (gtrx.org) integration for Stripe — postback firing, cookie tracking, and deduplication helpers.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": ["src"],
+  "keywords": ["glitchy", "affiliate", "stripe", "postback", "gtrx"],
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=18",
+    "stripe": ">=14"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "stripe": { "optional": true }
+  }
+}
