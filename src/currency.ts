@@ -10,6 +10,47 @@ const ZERO_DECIMAL_CURRENCIES = new Set([
 const FX_URL = "https://api.frankfurter.app/latest?from=USD";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+// Approximate fallback rates used only when Frankfurter is unreachable and
+// the in-memory cache is cold (e.g. fresh serverless instance + network error).
+const FALLBACK_USD_RATES: Record<string, number> = {
+    usd: 1,
+    gbp: 1.27,
+    eur: 1.08,
+    aud: 0.65,
+    nzd: 0.60,
+    cad: 0.73,
+    chf: 1.12,
+    jpy: 0.0067,
+    krw: 0.00073,
+    inr: 0.012,
+    sgd: 0.74,
+    hkd: 0.13,
+    mxn: 0.058,
+    brl: 0.19,
+    pln: 0.25,
+    sek: 0.095,
+    nok: 0.093,
+    dkk: 0.145,
+    czk: 0.045,
+    huf: 0.0028,
+    ron: 0.22,
+    bgn: 0.55,
+    try: 0.029,
+    zar: 0.055,
+    aed: 0.27,
+    sar: 0.27,
+    ils: 0.27,
+    thb: 0.028,
+    myr: 0.22,
+    php: 0.017,
+    idr: 0.000063,
+    vnd: 0.000040,
+    twd: 0.031,
+    clp: 0.0011,
+    cop: 0.00024,
+    ars: 0.00093,
+};
+
 let _rates: Record<string, number> | null = null;
 let _ratesExpiry = 0;
 
@@ -30,8 +71,8 @@ async function getUsdRates(): Promise<Record<string, number>> {
         _ratesExpiry = Date.now() + CACHE_TTL_MS;
         return rates;
     } catch (err) {
-        console.error("glitchy-stripe: failed to fetch exchange rates, using stale cache:", err);
-        return _rates ?? { usd: 1 };
+        console.error("glitchy-stripe: failed to fetch exchange rates, using fallback:", err);
+        return _rates ?? FALLBACK_USD_RATES;
     }
 }
 
