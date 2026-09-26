@@ -67,40 +67,42 @@ await stripe.checkout.sessions.create({
 
 ### 3. Fire the postback from your Stripe webhook
 
-On `checkout.session.completed` (first payment) and `invoice.payment_succeeded` with `billing_reason === "subscription_cycle"` (renewals):
+The Glitchy postback has no currency field — it always expects USD. Use `convertSaleAmountToUSD` to convert Stripe's `amount_total` from whatever currency the customer paid in.
 
 ```ts
 // app/api/stripe/webhook/route.ts
 import {
     fireGlitchyPostback,
+    convertSaleAmountToUSD,
     glitchyAlreadyReported,
     markGlitchyReported,
 } from "glitchy-stripe";
 
-// You define the sale amounts for your offer — Glitchy has no currency field,
-// so always send USD regardless of what Stripe charged.
-const SALE_AMOUNTS_USD: Record<string, number> = {
-    monthly: 22.85,
-    weekly: 8.88,
+// Build this once: 1 unit of each currency = X USD.
+// Derive it from whatever FX table your app already has.
+const USD_RATES: Record<string, number> = {
+    usd: 1,
+    gbp: 1.27,
+    eur: 1.08,
+    jpy: 0.0067,
+    // ... add every currency your checkout supports
 };
 
 async function reportToGlitchy(
     stripe: Stripe,
     invoiceId: string,
+    amountTotal: number,
+    currency: string,
     metadata: Record<string, string>,
-    plan: string,
 ) {
     const transactionId = metadata.glitchy_transaction_id ?? "";
     if (!transactionId) return; // organic sale, nothing to report
 
     if (await glitchyAlreadyReported(stripe, invoiceId)) return;
 
-    const saleAmount = SALE_AMOUNTS_USD[plan];
-    if (!saleAmount) return;
-
     const result = await fireGlitchyPostback({
         transactionId,
-        saleAmount: saleAmount.toFixed(2),
+        saleAmount: convertSaleAmountToUSD(amountTotal, currency, USD_RATES),
         affiliateId: metadata.glitchy_sub1,
         offerId: metadata.glitchy_sub2,
         source: metadata.glitchy_sub4,
@@ -112,6 +114,30 @@ async function reportToGlitchy(
 
 ---
 
+## How currency conversion works
+
+Glitchy's postback endpoint accepts no currency field — whatever number you send in `amount`, it reads as USD. `convertSaleAmountToUSD` handles two things:
+
+1. **Zero-decimal currencies** — Stripe stores JPY, KRW, VND etc. as whole units (¥1328, not 132800). The function knows which currencies are zero-decimal and skips the ÷100 step for them.
+2. **FX conversion** — multiplies the decimal amount by your provided rate to get USD.
+
+You supply the `usdRates` map so the package has no opinion on exchange rates. If a currency isn't in your map, the function logs an error and returns `"0.00"` rather than throwing, so a missing rate never breaks checkout.
+
+```ts
+import { convertSaleAmountToUSD, STRIPE_ZERO_DECIMAL_CURRENCIES } from "glitchy-stripe";
+
+// Stripe amount_total for a £17.99 charge is 1799 (pence)
+convertSaleAmountToUSD(1799, "gbp", { gbp: 1.27 }); // → "22.85"
+
+// Stripe amount_total for ¥1328 is 1328 (already in yen — zero-decimal)
+convertSaleAmountToUSD(1328, "jpy", { jpy: 0.0067 }); // → "8.90"
+
+// If you need to add currencies to the zero-decimal set:
+convertSaleAmountToUSD(amount, currency, rates, new Set([...STRIPE_ZERO_DECIMAL_CURRENCIES, "myr"]));
+```
+
+---
+
 ## How deduplication works
 
 Stripe can deliver the same webhook event more than once. To prevent double-paying affiliates, `markGlitchyReported` stamps the Stripe invoice with `glitchy_postback_sent: <ISO timestamp>` after a successful postback. `glitchyAlreadyReported` always re-fetches the invoice from the Stripe API (not the webhook payload, which predates any marker we wrote) before firing.
@@ -119,6 +145,19 @@ Stripe can deliver the same webhook event more than once. To prevent double-payi
 ---
 
 ## API
+
+### `convertSaleAmountToUSD(amountTotal, currency, usdRates, zeroDecimalCurrencies?)`
+
+Converts a Stripe `amount_total` to a USD string for the postback.
+
+| Param | Type | Description |
+|---|---|---|
+| `amountTotal` | `number` | Stripe's raw `amount_total` (smallest unit — cents for most, already in major units for zero-decimal) |
+| `currency` | `string` | ISO 4217 code, case-insensitive (`"gbp"`, `"JPY"`, `"usd"`) |
+| `usdRates` | `Record<string, number>` | Map of lowercase ISO code → USD value of 1 unit. e.g. `{ gbp: 1.27, jpy: 0.0067 }` |
+| `zeroDecimalCurrencies` | `Set<string>` | Optional override. Defaults to `STRIPE_ZERO_DECIMAL_CURRENCIES` |
+
+Returns a USD string to 2 decimal places (e.g. `"22.85"`), or `"0.00"` if the rate is missing.
 
 ### `fireGlitchyPostback(input)`
 
@@ -158,6 +197,10 @@ Returns `true` if the invoice has already been stamped. Pass your Stripe client 
 ### `markGlitchyReported(stripe, invoiceId)`
 
 Stamps the invoice. Call after a successful `fireGlitchyPostback`. Pass your Stripe client instance.
+
+### `STRIPE_ZERO_DECIMAL_CURRENCIES`
+
+The default `Set<string>` of zero-decimal currency codes used by `convertSaleAmountToUSD`. Export it to extend with your own entries if needed.
 
 ### `GLITCHY_OFFER_ID`
 
